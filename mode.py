@@ -5,6 +5,8 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from losses import TVLoss, perceptual_loss
 from dataset import *
+#from selfattention import Generator, Discriminator
+#from srgan_dswc_model import Generator, Discriminator
 from srgan_model import Generator, Discriminator
 from vgg19 import vgg19
 import numpy as np
@@ -15,13 +17,10 @@ from skimage.metrics import structural_similarity as compare_ssim
 import matplotlib.pyplot as plt
 
 
-#from skimage.measure import compare_psnr
-
-
 def train(args):
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
+    print(device)
     transform  = transforms.Compose([crop(args.scale, args.patch_size), augmentation()])
     dataset = mydata(GT_path = args.GT_path, LR_path = args.LR_path, in_memory = args.in_memory, transform = transform)
     loader = DataLoader(dataset, batch_size = args.batch_size, shuffle = True, num_workers = args.num_workers)
@@ -42,28 +41,28 @@ def train(args):
     pre_epoch = 0
     fine_epoch = 0
     
-    #### Train using L2_loss
-    # while pre_epoch < args.pre_train_epoch:
-    #     for i, tr_data in enumerate(loader):
-    #         gt = tr_data['GT'].to(device)
-    #         lr = tr_data['LR'].to(device)
+#     ### Train using L2_loss
+#     while pre_epoch < args.pre_train_epoch:
+#         for i, tr_data in enumerate(loader):
+#             gt = tr_data['GT'].to(device)
+#             lr = tr_data['LR'].to(device)
 
-    #         output, _ = generator(lr)
-    #         loss = l2_loss(gt, output)
+#             output, _ = generator(lr)
+#             loss = l2_loss(gt, output)
 
-    #         g_optim.zero_grad()
-    #         loss.backward()
-    #         g_optim.step()
+#             g_optim.zero_grad()
+#             loss.backward()
+#             g_optim.step()
 
-    #     pre_epoch += 1
+#         pre_epoch += 1
 
-    #     if pre_epoch % 2 == 0:
-    #         print(pre_epoch)
-    #         print(loss.item())
-    #         print('=========')
+#         if pre_epoch % 2 == 0:
+#             print(pre_epoch)
+#             print(loss.item())
+#             print('=========')
         
-    #     if pre_epoch % 500 ==0:
-    #         torch.save(generator.state_dict(), './model/pre_trained_model_%03d.pt'%pre_epoch)
+#         if pre_epoch % 500 ==0:
+#             torch.save(generator.state_dict(), './model/pre_trained_model_%03d.pt'%pre_epoch)
 
     # print("EWEREWR")        
     #### Train using perceptual & adversarial loss
@@ -129,16 +128,14 @@ def train(args):
             
         fine_epoch += 1
 
-        if fine_epoch % 2 == 0:
+        if fine_epoch % 6 == 0:
             print(fine_epoch)
-            print('train w/ adv and per loss')
+            print('training w/ adv and per loss and transfer learning')
             print(g_loss.item())
             print(d_loss.item())
-            print('=========\n')
+            print('==============\n')
 
-        if fine_epoch % 2 ==0:
-            #torch.save(generator.state_dict(), './model/SRGAN_gene_%03d.pt'%fine_epoch)
-            #torch.save(discriminator.state_dict(), './model/SRGAN_discrim_%03d.pt'%fine_epoch)
+        if fine_epoch % 500 ==0:
             torch.save(generator.state_dict(), './model/SRGAN_gene_%03d.pt'%fine_epoch)
             # Visualize an example generated image
             with torch.no_grad():
@@ -151,23 +148,12 @@ def train(args):
                 example_gt = example_gt.transpose(1, 2, 0)
                 example_output = example_output.transpose(1, 2, 0)
 
-                # Optionally, you can use Matplotlib to visualize the images
-                plt.figure(figsize=(10, 5))
-
-                plt.subplot(1, 2, 1)
-                plt.title('Generated Image')
-                plt.imshow(example_output)
-                plt.axis('off')
-
-                plt.subplot(1, 2, 2)
-                plt.title('Ground Truth Image')
-                plt.imshow(example_gt)
-                plt.axis('off')
-                plt.show()
-            #torch.save(discriminator.state_dict(), './model/SRGAN_discrim_%03d.pt'%fine_epoch)
+                result = Image.fromarray((example_output * 255.0).astype(np.uint8))
+                result.save('./result_transferVisual/generated_Image_%04d.png'%i)
+                result1 = Image.fromarray((example_gt * 255.0).astype(np.uint8))
+                result1.save('./result_transferVisual/groundtruth_Image_%04d.png'%i)
 
 
-# In[ ]:
 
 def test(args):
     print(args)
@@ -180,10 +166,10 @@ def test(args):
     generator = generator.to(device)
     generator.eval()
 
-    result_dir = './result/result_transfer/'
+    result_dir = './result/result_transfer500/'
     os.makedirs(result_dir, exist_ok=True)
     
-    f = open('./result_transfer.txt', 'w')
+    f = open('./result_2000.txt', 'w')
     psnr_list = []
     ssim_list = []
     
@@ -216,18 +202,14 @@ def test(args):
             f.write('psnr : %04f \n' % psnr)
 
             #SSIM Calculation
-            #ssim = compare_ssim(y_output, y_gt, multichannel=True)
-            #print(output.shape)
-            #print(gt.shape)
-
             ssim = compare_ssim(output,gt, data_range=1.0,channel_axis=2)
             ssim_list.append(ssim)
             f.write('ssim : %04f \n' % ssim)
 
             result = Image.fromarray((output * 255.0).astype(np.uint8))
-            result.save('./result/result_transfer/res_%04d.png'%i)
+            result.save('./result/result_transfer500/res_%04d.png'%i)
 
-        f.write('avg psnr : %04f' % np.mean(psnr_list))
+        f.write('avg psnr \n : %04f' % np.mean(psnr_list))
         f.write('avg ssim : %04f' % np.mean(ssim_list))
 
 
